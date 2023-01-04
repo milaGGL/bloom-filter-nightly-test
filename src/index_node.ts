@@ -24,7 +24,6 @@ import {
 
 import { firebaseConfig, isDefaultFirebaseConfig } from './firebase_config';
 import { runTheTest } from './run_the_test';
-import { CancellationTokenSource } from './cancellation_token';
 import { log, setLogFunction } from './logging';
 import { log as nodeLog } from './logging_node';
 import { formatElapsedTime } from './util';
@@ -132,18 +131,14 @@ async function go() {
     return;
   }
 
-  // Since there is no way to cancel when running in Node.js, just use a
-  // CancellationToken that will never be cancelled.
-  const cancellationToken = new CancellationTokenSource().cancellationToken;
-
   const startTime: DOMHighResTimeStamp = performance.now();
   log(`Test Started`);
   try {
     const db = setupFirestore(setupFirestoreOptions);
-    await runTheTest(db, cancellationToken);
+    await runTheTest(db);
   } catch (e) {
     if (e instanceof Error) {
-      log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
+      log(`ERROR: ${e.message}`, { alsoLogToConsole: true });
       console.log(e.stack);
     } else {
       log(`ERROR: ${e}`);

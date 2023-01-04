@@ -45,10 +45,10 @@ export function generateRandomInt(): number {
   return Math.floor(Math.random() * 1000);
 }
 
-export function createdDocumentData() {
+export function createdDocumentData(forcedTrue: boolean = false) {
   return {
     foo: generateRandomInt(),
-    matched: generateBoolean()
+    matched: forcedTrue? true: generateBoolean()
   };
 }
 

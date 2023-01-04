@@ -36,16 +36,7 @@ import {
 } from '@firebase/firestore';
 
 import { log } from './logging';
-import { CancellationToken } from './cancellation_token';
-import {
-  createdDocumentData,
-  createDocument,
-  createDocuments,
-  createEmptyCollection,
-  generateBoolean,
-  generateRandomInt,
-  generateValue
-} from './util';
+import { createdDocumentData, createDocument } from './util';
 
 /**
  * Runs the test.
@@ -54,13 +45,9 @@ import {
  * when the user clicks the "Run Test" button in the UI.
  *
  * @param db the `Firestore` instance to use.
- * @param cancellationToken a token that can be used to terminate early in the
  * case of a cancellation request.
  */
-export async function runTheTest(
-  db: Firestore,
-  cancellationToken: CancellationToken
-): Promise<void> {
+export async function runTheTest(db: Firestore): Promise<void> {
   const collectionRef = collection(db, 'v9web-demo');
   const documentRef1 = await createDocument(
     collectionRef,
@@ -77,7 +64,7 @@ export async function runTheTest(
     'doc3',
     createdDocumentData()
   );
-  cancellationToken.throwIfCancelled();
+
   const matchQuery = query(collectionRef, where('matched', '==', true));
   const unsubscribe = onSnapshot(matchQuery, snapshot => {
     log(`Watch Change for "matched==true" query:`);
@@ -106,63 +93,65 @@ export async function runTheTest(
     });
     log('\n');
   });
-  cancellationToken.throwIfCancelled();
 }
 
-export async function runAddDoc(
-  db: Firestore,
-  cancellationToken: CancellationToken
-): Promise<void> {
+export async function runSizeTest(db: Firestore): Promise<void> {
+  const collectionRef = collection(db, 'v9web-demo');
+  for (let i = 1; i <= 1000; i++) {
+    await createDocument(collectionRef, `doc${i}`, createdDocumentData(true));
+  }
+
+  const matchQuery = query(collectionRef, where('matched', '==', true));
+  const unsubscribe = onSnapshot(matchQuery, snapshot => {
+    log(`${snapshot.size} documents created for query { matched == true} .`);
+  });
+}
+
+export async function runAddDoc(db: Firestore): Promise<void> {
   log('\n');
 
   const docId = document.getElementById('txtAddDoc') as HTMLInputElement;
   const collectionRef = collection(db, 'v9web-demo');
-  await createDocument(collectionRef, docId.value, createdDocumentData());
-  cancellationToken.throwIfCancelled();
+  try {
+    await createDocument(collectionRef, docId.value, createdDocumentData());
+  } catch (e) {
+    console.log('error in add doc:', e);
+  }
 }
 
-export async function runDeleteDoc(
-  db: Firestore,
-  cancellationToken: CancellationToken
-): Promise<void> {
+export async function runDeleteDoc(db: Firestore): Promise<void> {
   log('\n');
 
   const docId = document.getElementById('txtDeleteDoc') as HTMLInputElement;
   const docRef = doc(db, 'v9web-demo', docId.value);
-
-  await deleteDoc(docRef);
-
-  cancellationToken.throwIfCancelled();
+  try {
+    await deleteDoc(docRef);
+  } catch (e) {
+    console.log('error in delete doc:', e);
+  }
 }
 
-export async function runModifyDoc(
-  db: Firestore,
-  cancellationToken: CancellationToken
-): Promise<void> {
+export async function runModifyDoc(db: Firestore): Promise<void> {
   log('\n');
 
   const docId = document.getElementById('txtModifyDoc') as HTMLInputElement;
   const docRef = doc(db, 'v9web-demo', docId.value);
   const snapshot = await getDoc(docRef);
-  await updateDoc(docRef, {
-    matched: snapshot.exists() ? !snapshot.data().matched : false
-  });
-
-  cancellationToken.throwIfCancelled();
+  try {
+    await updateDoc(docRef, {
+      matched: snapshot.exists() ? !snapshot.data().matched : false
+    });
+  } catch (e) {
+    console.log('error in modify doc:', e);
+  }
 }
-export async function runListDocs(
-  db: Firestore,
-  cancellationToken: CancellationToken
-): Promise<void> {
+export async function runListDocs(db: Firestore): Promise<void> {
   log('\n Listing docs with "matched==true":');
   const collectionRef = collection(db, 'v9web-demo');
   const matchQuery = query(collectionRef, where('matched', '==', true));
 
   const snapshot = await getDocs(matchQuery);
   snapshot.forEach(doc => {
-    console.log( doc)
     log(`${doc._key.toString()}: ${JSON.stringify(doc.data())}`);
   });
-
-  cancellationToken.throwIfCancelled();
 }

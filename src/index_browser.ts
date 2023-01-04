@@ -20,7 +20,9 @@ import {
   Firestore,
   getFirestore,
   initializeFirestore,
-  setLogLevel
+  setLogLevel,
+  enableNetwork,
+  disableNetwork
 } from '@firebase/firestore';
 
 import { firebaseConfig, isDefaultFirebaseConfig } from './firebase_config';
@@ -29,9 +31,9 @@ import {
   runDeleteDoc,
   runListDocs,
   runModifyDoc,
+  runSizeTest,
   runTheTest
 } from './run_the_test';
-import { CancellationTokenSource } from './cancellation_token';
 import { log, resetStartTime, setLogFunction } from './logging';
 import { clearLogs, log as browserLog } from './logging_browser';
 import { formatElapsedTime } from './util';
@@ -129,7 +131,17 @@ function onChkDebugLoggingClick(): void {
   }
 }
 
-let currentCancellationTokenSource: CancellationTokenSource | null = null;
+async function onchkDisableNetworkClick(): Promise<void> {
+  if (db) {
+    const { chkDisableNetwork } = getUiElements();
+    const disable = saveCheckboxState(chkDisableNetwork);
+    if (disable) {
+      await disableNetwork(db);
+    } else {
+      await enableNetwork(db);
+    }
+  }
+}
 
 /**
  * Callback invoked whenever the "Enable Debug Logging" checkbox's checked state
@@ -142,22 +154,15 @@ async function go(this: GlobalEventHandlers, ev: MouseEvent) {
   const { btnRunTest, btnCancelTest } = getUiElements();
   const title = (ev.currentTarget as HTMLElement).innerText;
 
-  if (currentCancellationTokenSource) {
-    currentCancellationTokenSource.cancel();
-  }
-  const cancellationTokenSource = new CancellationTokenSource();
-  currentCancellationTokenSource = cancellationTokenSource;
-
   log(`"${title}" started`);
   try {
     btnRunTest.disabled = true;
     btnCancelTest.disabled = false;
     btnCancelTest.onclick = (ev: MouseEvent) => {
       log(`"${(ev.currentTarget as HTMLElement).innerText}" clicked`);
-      cancellationTokenSource.cancel();
     };
     const db = setupFirestore();
-    await runTheTest(db, cancellationTokenSource.cancellationToken);
+    await runTheTest(db);
   } catch (e) {
     if (e instanceof Error) {
       log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
@@ -167,6 +172,32 @@ async function go(this: GlobalEventHandlers, ev: MouseEvent) {
     }
   } finally {
     btnRunTest.disabled = false;
+  }
+  log('\n\n');
+}
+
+async function runBitmapSizeTest(this: GlobalEventHandlers, ev: MouseEvent) {
+  const { btnSizeTest, btnCancelTest } = getUiElements();
+  const title = (ev.currentTarget as HTMLElement).innerText;
+
+  log(`"${title}" started`);
+  try {
+    btnSizeTest.disabled = true;
+    btnCancelTest.disabled = false;
+    btnCancelTest.onclick = (ev: MouseEvent) => {
+      log(`"${(ev.currentTarget as HTMLElement).innerText}" clicked`);
+    };
+    const db = setupFirestore();
+    await runSizeTest(db);
+  } catch (e) {
+    if (e instanceof Error) {
+      log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
+      console.log(e.stack);
+    } else {
+      log(`ERROR: ${e}`);
+    }
+  } finally {
+    btnSizeTest.disabled = false;
   }
   log('\n\n');
 }
@@ -227,15 +258,9 @@ function initializeCheckboxState(checkbox: HTMLInputElement): void {
 }
 
 async function addDoc(this: GlobalEventHandlers, ev: MouseEvent) {
-  if (currentCancellationTokenSource) {
-    currentCancellationTokenSource.cancel();
-  }
-  const cancellationTokenSource = new CancellationTokenSource();
-  currentCancellationTokenSource = cancellationTokenSource;
-
   try {
     const db = setupFirestore();
-    await runAddDoc(db, cancellationTokenSource.cancellationToken);
+    await runAddDoc(db);
   } catch (e) {
     if (e instanceof Error) {
       log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
@@ -246,19 +271,12 @@ async function addDoc(this: GlobalEventHandlers, ev: MouseEvent) {
   }
   log('Add doc completed.');
   log('\n');
-
 }
 
 async function deleteDoc(this: GlobalEventHandlers, ev: MouseEvent) {
-  if (currentCancellationTokenSource) {
-    currentCancellationTokenSource.cancel();
-  }
-  const cancellationTokenSource = new CancellationTokenSource();
-  currentCancellationTokenSource = cancellationTokenSource;
-
   try {
     const db = setupFirestore();
-    await runDeleteDoc(db, cancellationTokenSource.cancellationToken);
+    await runDeleteDoc(db);
   } catch (e) {
     if (e instanceof Error) {
       log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
@@ -272,15 +290,9 @@ async function deleteDoc(this: GlobalEventHandlers, ev: MouseEvent) {
 }
 
 async function modifyDoc(this: GlobalEventHandlers, ev: MouseEvent) {
-  if (currentCancellationTokenSource) {
-    currentCancellationTokenSource.cancel();
-  }
-  const cancellationTokenSource = new CancellationTokenSource();
-  currentCancellationTokenSource = cancellationTokenSource;
-
   try {
     const db = setupFirestore();
-    await runModifyDoc(db, cancellationTokenSource.cancellationToken);
+    await runModifyDoc(db);
   } catch (e) {
     if (e instanceof Error) {
       log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
@@ -294,15 +306,9 @@ async function modifyDoc(this: GlobalEventHandlers, ev: MouseEvent) {
 }
 
 async function listDocs(this: GlobalEventHandlers, ev: MouseEvent) {
-  if (currentCancellationTokenSource) {
-    currentCancellationTokenSource.cancel();
-  }
-  const cancellationTokenSource = new CancellationTokenSource();
-  currentCancellationTokenSource = cancellationTokenSource;
-
   try {
     const db = setupFirestore();
-    await runListDocs(db, cancellationTokenSource.cancellationToken);
+    await runListDocs(db);
   } catch (e) {
     if (e instanceof Error) {
       log(`ERROR: ${e.message}`, { alsoLogToConsole: false });
@@ -320,14 +326,17 @@ async function listDocs(this: GlobalEventHandlers, ev: MouseEvent) {
  * See `initializeCheckboxState()`.
  */
 function initializeCheckboxStates(): void {
-  const { chkDebugLogging, chkFirestoreEmulator } = getUiElements();
+  const { chkDebugLogging, chkFirestoreEmulator, chkDisableNetwork } =
+    getUiElements();
   initializeCheckboxState(chkDebugLogging);
   initializeCheckboxState(chkFirestoreEmulator);
+  initializeCheckboxState(chkDisableNetwork);
 }
 
 // The HTML elements in the UI with which this script interacts.
 interface UiElements {
   btnRunTest: HTMLButtonElement;
+  btnSizeTest: HTMLButtonElement;
   btnList: HTMLButtonElement;
   btnCancelTest: HTMLButtonElement;
   btnClearLogs: HTMLButtonElement;
@@ -336,12 +345,14 @@ interface UiElements {
   btnModifyDoc: HTMLButtonElement;
   chkDebugLogging: HTMLInputElement;
   chkFirestoreEmulator: HTMLInputElement;
+  chkDisableNetwork: HTMLInputElement;
 }
 
 /** Returns the HTML elements from the UI with which this script interacts. */
 function getUiElements(): UiElements {
   return {
     btnRunTest: document.getElementById('btnRunTest') as HTMLButtonElement,
+    btnSizeTest: document.getElementById('btnSizeTest') as HTMLButtonElement,
     btnList: document.getElementById('btnList') as HTMLButtonElement,
     btnCancelTest: document.getElementById(
       'btnCancelTest'
@@ -355,6 +366,9 @@ function getUiElements(): UiElements {
     ) as HTMLInputElement,
     chkFirestoreEmulator: document.getElementById(
       'chkFirestoreEmulator'
+    ) as HTMLInputElement,
+    chkDisableNetwork: document.getElementById(
+      'chkDisableNetwork'
     ) as HTMLInputElement
   };
 }
@@ -369,13 +383,17 @@ function initializeUi(): void {
     chkDebugLogging,
     btnAddDoc,
     btnDeleteDoc,
-    btnModifyDoc
+    btnModifyDoc,
+    chkDisableNetwork,
+    btnSizeTest
   } = getUiElements();
   btnRunTest.onclick = go;
+  btnSizeTest.onclick = runBitmapSizeTest;
   btnList.onclick = listDocs;
   btnCancelTest.disabled = true;
   btnClearLogs.onclick = clearLogsAndResetStartTime;
   chkDebugLogging.onclick = onChkDebugLoggingClick;
+  chkDisableNetwork.onclick = onchkDisableNetworkClick;
   btnAddDoc.onclick = addDoc;
   btnDeleteDoc.onclick = deleteDoc;
   btnModifyDoc.onclick = modifyDoc;
